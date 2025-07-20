@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 16
+
+    - name: Build Go Services
+      run: |
+        for service in go/services/*; do
+          cd $service
+          go build ./...
+          cd -
+        done
+
+    - name: Test Go Services
+      run: |
+        for service in go/services/*; do
+          cd $service
+          go test ./...
+          cd -
+        done
+
+    - name: Install Python Dependencies
+      run: |
+        for component in python/ai_components/*; do
+          cd $component
+          pip install -r requirements.txt
+          cd -
+        done
+
+    - name: Test Python Components
+      run: |
+        for component in python/ai_components/*; do
+          cd $component
+          pytest
+          cd -
+        done
+
+    - name: Install Solidity Dependencies
+      run: cd solidity && npm install
+
+    - name: Compile and Test Solidity Contracts
+      run: cd solidity && npx hardhat test
