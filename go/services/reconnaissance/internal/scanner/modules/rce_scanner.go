@@ -1,45 +1,12 @@
 package modules
 
 import (
-	"fmt"
+	"context"
+	"github.com/autonomouspen/reconnaissance/internal/scanner"
 )
 
-func CommandInjectionTests() {
-	fmt.Println("Command Injection Tested")
-}
+type RceScanner struct{}
 
-func CodeInjectionDetection() {
-	fmt.Println("Code Injection Detected")
-}
-
-func DeserializationAttacks() {
-	fmt.Println("Deserialization Attacks Tested")
-}
-
-func TemplateInjection() {
-	fmt.Println("Template Injection Tested")
-}
-
-func FileUploadExploits() {
-	fmt.Println("File Upload Exploits Tested")
-}
-
-func HeaderInjection() {
-	fmt.Println("Header Injection Tested")
-}
-
-func EnvironmentVariables() {
-	fmt.Println("Environment Variables Tested")
-}
-
-func ContainerEscape() {
-	fmt.Println("Container Escape Tested")
-}
-
-func GenerateReverseShell() {
-	fmt.Println("Reverse Shell Generated")
-}
-
-func ValidateExecution() {
-	fmt.Println("Execution Validated")
+func (s *RceScanner) Scan(ctx context.Context, target *scanner.Target, vulnChan chan<- *scanner.Vulnerability) {
+	// Placeholder implementation
 }

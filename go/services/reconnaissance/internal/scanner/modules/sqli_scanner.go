@@ -2,7 +2,29 @@ package modules
 
 import (
 	"fmt"
+	"github.com/autonomouspen/reconnaissance/pkg/plugin"
 )
+
+type SQLiPlugin struct{}
+
+func (p *SQLiPlugin) Name() string {
+	return "SQLi Scanner"
+}
+
+func (p *SQLiPlugin) Run(target string) (string, error) {
+	fmt.Printf("Running SQLi scanner on %s\n", target)
+	IdentifyInjectionPoints()
+	TestBlindSQLi()
+	ExploitUnionBased()
+	DetectErrorBased()
+	BypassFilters()
+	ExtractDatabase()
+	HandleMultipleDBMS()
+	SecondOrderSQLi()
+	NoSQLInjection()
+	GenerateExploitCode()
+	return "SQLi vulnerabilities found", nil
+}
 
 func IdentifyInjectionPoints() {
 	fmt.Println("Injection Points Identified")
@@ -43,3 +65,5 @@ func NoSQLInjection() {
 func GenerateExploitCode() {
 	fmt.Println("Exploit Code Generated")
 }
+
+var _ plugin.Plugin = (*SQLiPlugin)(nil)

@@ -1,45 +1,12 @@
 package modules
 
 import (
-	"fmt"
+	"context"
+	"github.com/autonomouspen/reconnaissance/internal/scanner"
 )
 
-func DetectContext() {
-	fmt.Println("Context Detected")
-}
+type XssScanner struct{}
 
-func GeneratePayloads() {
-	fmt.Println("Payloads Generated")
-}
-
-func BypassWAF() {
-	fmt.Println("WAF Bypassed")
-}
-
-func ValidateWithBrowser() {
-	fmt.Println("Validated with Browser")
-}
-
-func DetectDOM_XSS() {
-	fmt.Println("DOM XSS Detected")
-}
-
-func GeneratePoC() {
-	fmt.Println("PoC Generated")
-}
-
-func CollectEvidence() {
-	fmt.Println("Evidence Collected")
-}
-
-func HandleFilterEvasion() {
-	fmt.Println("Filter Evasion Handled")
-}
-
-func CheckReflection() {
-	fmt.Println("Reflection Checked")
-}
-
-func TestAllVectors() {
-	fmt.Println("All Vectors Tested")
+func (s *XssScanner) Scan(ctx context.Context, target *scanner.Target, vulnChan chan<- *scanner.Vulnerability) {
+	// Placeholder implementation
 }
