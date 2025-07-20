@@ -4,6 +4,21 @@
 
 To create a large-scale software project, "AUTONOMOUSPEN AI," consisting of 250,000 lines of code, generated entirely by Jules AI. The human role is strictly limited to prompt engineering, guiding the AI's development process.
 
+## High-Level Architecture
+
+AUTONOMOUSPEN AI will be built using a microservices architecture. This choice promotes modularity, scalability, and resilience. Each microservice will be a self-contained component with a specific responsibility. The services will communicate with each other via a combination of synchronous REST APIs and asynchronous messaging queues.
+
+The entire platform will be containerized using Docker and orchestrated with Kubernetes for automated deployment, scaling, and management.
+
+### Core Microservices
+
+1.  **Orchestrator Service:** The central brain of the platform. It manages the penetration testing workflow, coordinates the other services, and stores the results.
+2.  **Reconnaissance Service:** Performs initial information gathering on the target system, including port scanning, service enumeration, and vulnerability identification.
+3.  **Exploitation Service:** Attempts to exploit identified vulnerabilities to gain access to the target system. This service will house a variety of exploit modules.
+4.  **Post-Exploitation Service:** Once access is gained, this service performs actions on the target system, such as privilege escalation, lateral movement, and data exfiltration.
+5.  **Reporting Service:** Generates comprehensive reports of the penetration test findings, including vulnerabilities, exploits, and recommendations.
+6.  **User Interface (UI) Service:** A web-based interface for users to configure and launch penetration tests, and to view the results.
+
 ---
 
 ## Phase 1: Foundation & Tooling (The "Bootstrap" Phase)
