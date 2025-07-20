@@ -11,12 +11,14 @@ import (
 )
 
 type XSSScanner struct {
-	config         *ScannerConfig
-	client         *http.Client
-	rateLimiter    *RateLimiter
-	payloadManager *PayloadManager
-	validator      *XSSValidator
-	results        *ResultCollector
+	config          *ScannerConfig
+	client          *http.Client
+	rateLimiter     *RateLimiter
+	payloadManager  *PayloadManager
+	contextAnalyzer *ContextAnalyzer
+	validator       *XSSValidator
+	results         *ResultCollector
+	wafFingerprinter *WAFFingerprinter
 }
 
 type ScannerConfig struct {
@@ -26,16 +28,23 @@ type ScannerConfig struct {
 	UserAgent            string
 	ProxyURL             string
 	RequestTimeout       time.Duration
+	RateLimit            int
+	RateLimitInterval    time.Duration
+	RateLimitMaxTokens   int
 }
 
 func NewXSSScanner(config *ScannerConfig) *XSSScanner {
+	pm := NewPayloadManager()
+	pm.LoadPayloadsFromFile("payloads.json")
 	return &XSSScanner{
-		config:         config,
-		client:         createHTTPClient(config),
-		rateLimiter:    NewRateLimiter(100, time.Second),
-		payloadManager: NewPayloadManager(),
-		validator:      NewXSSValidator(),
-		results:        NewResultCollector(),
+		config:          config,
+		client:          createHTTPClient(config),
+		rateLimiter:     NewRateLimiter(config.RateLimit, config.RateLimitInterval, config.RateLimitMaxTokens),
+		payloadManager:  pm,
+		contextAnalyzer: NewContextAnalyzer(),
+		validator:       NewXSSValidator(),
+		results:         NewResultCollector(),
+		wafFingerprinter: NewWAFFingerprinter(),
 	}
 }
 
@@ -73,17 +82,48 @@ func (x *XSSScanner) ScanURL(ctx context.Context, rawURL string) error {
 }
 
 func (x *XSSScanner) fuzzParameter(ctx context.Context, parsedURL *url.URL, param string) {
-	payloads := x.payloadManager.GetPayloadsForContext("html")
 	baseQuery := parsedURL.Query()
+	originalValue := baseQuery.Get(param)
+
+	// First, send a request with a non-malicious payload to analyze the context
+	testPayload := "test"
+	query := baseQuery
+	query.Set(param, testPayload)
+	targetURL := *parsedURL
+	targetURL.RawQuery = query.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", targetURL.String(), nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("User-Agent", x.config.UserAgent)
+
+	resp, err := x.client.Do(req)
+	if err != nil {
+		return
+	}
+
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return
+	}
+	body := string(bodyBytes)
+
+	if x.wafFingerprinter.DetectWAF(resp, body) {
+		fmt.Println("[!] WAF Detected!")
+		// In a real implementation, we would adjust our scanning strategy here.
+	}
+
+	contextType := x.contextAnalyzer.AnalyzeContext(body, param, testPayload)
+	payloads := x.payloadManager.GetPayloadsForContext(contextType)
 
 	for i, payload := range payloads {
 		if i > x.config.MaxPayloadsPerParam {
 			break
 		}
 
-		query := baseQuery
 		query.Set(param, payload.Value)
-		targetURL := *parsedURL
 		targetURL.RawQuery = query.Encode()
 
 		req, err := http.NewRequestWithContext(ctx, "GET", targetURL.String(), nil)
@@ -131,6 +171,8 @@ func (x *XSSScanner) fuzzParameter(ctx context.Context, parsedURL *url.URL, para
 			}
 		}
 	}
+	query.Set(param, originalValue)
+	parsedURL.RawQuery = query.Encode()
 }
 
 func truncateBody(body string) string {
@@ -148,10 +190,6 @@ func createHTTPClient(config *ScannerConfig) *http.Client {
 func (x *XSSScanner) Results() *ResultCollector {
 	return x.results
 }
-type Payload struct {
-	Value string
-}
-
 type Vulnerability struct {
 	Type        string
 	Severity    string

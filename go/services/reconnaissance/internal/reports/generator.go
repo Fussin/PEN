@@ -27,13 +27,14 @@ func ExportCSV(filename string, vulns []modules.Vulnerability) error {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	header := []string{"Type", "Severity", "URL", "Param", "Payload", "Evidence", "Timestamp"}
+	header := []string{"Type", "Severity", "URL", "Param", "Payload", "Evidence", "Confidence", "CWE", "CVSS", "Timestamp"}
 	writer.Write(header)
 
 	for _, v := range vulns {
 		writer.Write([]string{
 			v.Type, v.Severity, v.URL, v.Parameter,
-			v.Payload, v.Evidence, v.Timestamp.Format(time.RFC3339),
+			v.Payload, v.Evidence, v.Confidence, v.CWE,
+			"6.1", v.Timestamp.Format(time.RFC3339),
 		})
 	}
 	return nil
@@ -41,20 +42,47 @@ func ExportCSV(filename string, vulns []modules.Vulnerability) error {
 
 func ExportHTML(filename string, vulns []modules.Vulnerability) error {
 	tmpl := `
+	<!DOCTYPE html>
 	<html>
-	<head><title>XSS Scan Report</title></head>
+	<head>
+		<title>XSS Scan Report</title>
+		<style>
+			body { font-family: sans-serif; }
+			table { border-collapse: collapse; width: 100%; }
+			th, td { border: 1px solid #ddd; padding: 8px; }
+			th { background-color: #f2f2f2; }
+		</style>
+	</head>
 	<body>
-	<h2>XSS Scanner Report ({{.Count}} Findings)</h2>
-	<table border='1'>
-	<tr>
-	<th>Type</th><th>Severity</th><th>URL</th><th>Param</th><th>Payload</th><th>Evidence</th><th>Time</th>
-	</tr>
-	{{range .Vulns}}
-	<tr>
-	<td>{{.Type}}</td><td>{{.Severity}}</td><td>{{.URL}}</td><td>{{.Parameter}}</td><td>{{.Payload}}</td><td>{{.Evidence}}</td><td>{{.Timestamp}}</td>
-	</tr>
-	{{end}}
-	</table>
+		<h2>XSS Scanner Report ({{.Count}} Findings)</h2>
+		<table>
+			<tr>
+				<th>Type</th>
+				<th>Severity</th>
+				<th>URL</th>
+				<th>Parameter</th>
+				<th>Payload</th>
+				<th>Evidence</th>
+				<th>Confidence</th>
+				<th>CWE</th>
+				<th>CVSS</th>
+				<th>Timestamp</th>
+			</tr>
+			{{range .Vulns}}
+			<tr>
+				<td>{{.Type}}</td>
+				<td>{{.Severity}}</td>
+				<td>{{.URL}}</td>
+				<td>{{.Parameter}}</td>
+				<td>{{.Payload}}</td>
+				<td>{{.Evidence}}</td>
+				<td>{{.Confidence}}</td>
+				<td>{{.CWE}}</td>
+				<td>{{.CVSS}}</td>
+				<td>{{.Timestamp}}</td>
+			</tr>
+			{{end}}
+		</table>
 	</body>
 	</html>
 	`

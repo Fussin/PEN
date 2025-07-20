@@ -63,3 +63,26 @@ func fuzzInteraction(url, payload string) bool {
 	}
 	return foundSelector == "detected"
 }
+
+func simulatePayloadExecution(url string, payload string) bool {
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel()
+
+	var alertFired bool
+	chromedp.ListenTarget(ctx, func(ev interface{}) {
+		if _, ok := ev.(*chromedp.EventDialogOpening); ok {
+			alertFired = true
+		}
+	})
+
+	tasks := chromedp.Tasks{
+		chromedp.Navigate(url),
+		chromedp.Sleep(2 * time.Second),
+	}
+
+	err := chromedp.Run(ctx, tasks)
+	if err != nil {
+		return false
+	}
+	return alertFired
+}

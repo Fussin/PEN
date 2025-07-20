@@ -1,0 +1,18 @@
+[
+  {
+    "Value": "<script>alert('XSS')</script>",
+    "Context": "html"
+  },
+  {
+    "Value": "onerror=alert('XSS')",
+    "Context": "attribute"
+  },
+  {
+    "Value": "javascript:alert('XSS')",
+    "Context": "url"
+  },
+  {
+    "Value": "background:url(javascript:alert('XSS'))",
+    "Context": "css"
+  }
+]

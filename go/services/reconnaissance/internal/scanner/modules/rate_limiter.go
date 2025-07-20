@@ -14,10 +14,10 @@ type RateLimiter struct {
 	refillStopped chan bool
 }
 
-func NewRateLimiter(rate int, interval time.Duration) *RateLimiter {
+func NewRateLimiter(rate int, interval time.Duration, maxTokens int) *RateLimiter {
 	limiter := &RateLimiter{
-		tokens:        rate,
-		maxTokens:     rate,
+		tokens:        maxTokens,
+		maxTokens:     maxTokens,
 		refillRate:    rate,
 		refillTicker:  time.NewTicker(interval),
 		refillStopped: make(chan bool),
@@ -32,7 +32,10 @@ func (r *RateLimiter) refill() {
 		select {
 		case <-r.refillTicker.C:
 			r.mtx.Lock()
-			r.tokens = r.maxTokens
+			r.tokens += r.refillRate
+			if r.tokens > r.maxTokens {
+				r.tokens = r.maxTokens
+			}
 			r.mtx.Unlock()
 		case <-r.refillStopped:
 			return
