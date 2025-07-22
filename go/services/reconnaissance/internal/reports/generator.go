@@ -1,24 +1,41 @@
 package reports
 
 import (
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"html/template"
 	"os"
 	"time"
 
-	"github.com/autonomouspen/reconnaissance/internal/scanner/modules"
+	"github.com/autonomouspen/reconnaissance/internal/common"
 )
 
-func ExportJSON(filename string, vulns []modules.Vulnerability) error {
-	data, err := json.MarshalIndent(vulns, "", "  ")
+type ReportVulnerability struct {
+	common.Vulnerability
+	Screenshot string
+}
+
+func ExportJSON(filename string, vulns []common.Vulnerability, screenshots map[string][]byte) error {
+	reportVulns := []ReportVulnerability{}
+	for _, v := range vulns {
+		rv := ReportVulnerability{
+			Vulnerability: v,
+		}
+		if img, ok := screenshots[v.URL]; ok {
+			rv.Screenshot = base64.StdEncoding.EncodeToString(img)
+		}
+		reportVulns = append(reportVulns, rv)
+	}
+
+	data, err := json.MarshalIndent(reportVulns, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(filename, data, 0644)
 }
 
-func ExportCSV(filename string, vulns []modules.Vulnerability) error {
+func ExportCSV(filename string, vulns []common.Vulnerability) error {
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -40,7 +57,7 @@ func ExportCSV(filename string, vulns []modules.Vulnerability) error {
 	return nil
 }
 
-func ExportHTML(filename string, vulns []modules.Vulnerability) error {
+func ExportHTML(filename string, vulns []common.Vulnerability, screenshots map[string][]byte) error {
 	tmpl := `
 	<!DOCTYPE html>
 	<html>
@@ -51,6 +68,7 @@ func ExportHTML(filename string, vulns []modules.Vulnerability) error {
 			table { border-collapse: collapse; width: 100%; }
 			th, td { border: 1px solid #ddd; padding: 8px; }
 			th { background-color: #f2f2f2; }
+			img { max-width: 100%; }
 		</style>
 	</head>
 	<body>
@@ -67,19 +85,21 @@ func ExportHTML(filename string, vulns []modules.Vulnerability) error {
 				<th>CWE</th>
 				<th>CVSS</th>
 				<th>Timestamp</th>
+				<th>Screenshot</th>
 			</tr>
 			{{range .Vulns}}
 			<tr>
-				<td>{{.Type}}</td>
-				<td>{{.Severity}}</td>
-				<td>{{.URL}}</td>
-				<td>{{.Parameter}}</td>
-				<td>{{.Payload}}</td>
-				<td>{{.Evidence}}</td>
-				<td>{{.Confidence}}</td>
-				<td>{{.CWE}}</td>
-				<td>{{.CVSS}}</td>
-				<td>{{.Timestamp}}</td>
+				<td>{{.Vulnerability.Type}}</td>
+				<td>{{.Vulnerability.Severity}}</td>
+				<td>{{.Vulnerability.URL}}</td>
+				<td>{{.Vulnerability.Parameter}}</td>
+				<td><pre>{{.Vulnerability.Payload}}</pre></td>
+				<td><pre>{{.Vulnerability.Evidence}}</pre></td>
+				<td>{{.Vulnerability.Confidence}}</td>
+				<td>{{.Vulnerability.CWE}}</td>
+				<td>{{.Vulnerability.CVSS}}</td>
+				<td>{{.Vulnerability.Timestamp}}</td>
+				<td><img src="data:image/png;base64,{{.Screenshot}}"></td>
 			</tr>
 			{{end}}
 		</table>
@@ -88,8 +108,20 @@ func ExportHTML(filename string, vulns []modules.Vulnerability) error {
 	`
 
 	t := template.Must(template.New("report").Parse(tmpl))
+
+	reportVulns := []ReportVulnerability{}
+	for _, v := range vulns {
+		rv := ReportVulnerability{
+			Vulnerability: v,
+		}
+		if img, ok := screenshots[v.URL]; ok {
+			rv.Screenshot = base64.StdEncoding.EncodeToString(img)
+		}
+		reportVulns = append(reportVulns, rv)
+	}
+
 	data := map[string]interface{}{
-		"Vulns": vulns,
+		"Vulns": reportVulns,
 		"Count": len(vulns),
 	}
 	file, err := os.Create(filename)

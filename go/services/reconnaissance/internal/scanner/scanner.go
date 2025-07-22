@@ -2,22 +2,14 @@ package scanner
 
 import (
 	"context"
+	"github.com/autonomouspen/reconnaissance/internal/common"
 )
 
-type Target struct {
-	URL string
-}
-
-type Vulnerability struct {
-	Type     string
-	Evidence string
-}
-
 type ScanResult struct {
-	Target          *Target
-	Vulnerabilities []*Vulnerability
+	Target          *common.Target
+	Vulnerabilities []*common.Vulnerability
 }
 
 type VulnerabilityScanner interface {
-	Scan(ctx context.Context, target *Target, vulnChan chan<- *Vulnerability)
+	Scan(ctx context.Context, target *common.Target, vulnChan chan<- *common.Vulnerability)
 }

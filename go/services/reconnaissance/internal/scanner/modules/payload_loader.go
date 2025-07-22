@@ -5,21 +5,18 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
-)
 
-type Payload struct {
-	Value   string `json:"Value"`
-	Context string `json:"Context"`
-}
+	"github.com/autonomouspen/reconnaissance/internal/common"
+)
 
 type PayloadManager struct {
 	mu              sync.Mutex
-	contextPayloads map[string][]Payload
+	contextPayloads map[string][]common.Payload
 }
 
 func NewPayloadManager() *PayloadManager {
 	return &PayloadManager{
-		contextPayloads: make(map[string][]Payload),
+		contextPayloads: make(map[string][]common.Payload),
 	}
 }
 
@@ -31,7 +28,7 @@ func (pm *PayloadManager) LoadPayloadsFromFile(filePath string) error {
 	defer jsonFile.Close()
 
 	byteValue, _ := ioutil.ReadAll(jsonFile)
-	var payloads []Payload
+	var payloads []common.Payload
 	err = json.Unmarshal(byteValue, &payloads)
 	if err != nil {
 		return err
@@ -45,7 +42,7 @@ func (pm *PayloadManager) LoadPayloadsFromFile(filePath string) error {
 	return nil
 }
 
-func (pm *PayloadManager) GetPayloadsForContext(ctx string) []Payload {
+func (pm *PayloadManager) GetPayloadsForContext(ctx string) []common.Payload {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	return pm.contextPayloads[ctx]

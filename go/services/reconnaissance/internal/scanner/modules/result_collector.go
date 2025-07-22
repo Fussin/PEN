@@ -1,21 +1,24 @@
 package modules
 
-import "sync"
+import (
+	"github.com/autonomouspen/reconnaissance/internal/common"
+	"sync"
+)
 
 type ResultCollector struct {
 	mu              sync.Mutex
-	vulnerabilities []Vulnerability
+	vulnerabilities []common.Vulnerability
 	screenshots     map[string][]byte
 }
 
 func NewResultCollector() *ResultCollector {
 	return &ResultCollector{
-		vulnerabilities: []Vulnerability{},
+		vulnerabilities: []common.Vulnerability{},
 		screenshots:     make(map[string][]byte),
 	}
 }
 
-func (r *ResultCollector) Add(v Vulnerability) {
+func (r *ResultCollector) Add(v common.Vulnerability) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.vulnerabilities = append(r.vulnerabilities, v)
@@ -27,8 +30,14 @@ func (r *ResultCollector) AttachScreenshot(url string, image []byte) {
 	r.screenshots[url] = image
 }
 
-func (r *ResultCollector) All() []Vulnerability {
+func (r *ResultCollector) All() []common.Vulnerability {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.vulnerabilities
+}
+
+func (r *ResultCollector) Screenshots() map[string][]byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.screenshots
 }

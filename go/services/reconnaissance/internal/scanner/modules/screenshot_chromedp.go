@@ -3,6 +3,7 @@ package modules
 import (
 	"context"
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"time"
 )
@@ -27,7 +28,6 @@ func triggerDOMEvents(ctx context.Context, selector string) error {
 	tasks := chromedp.Tasks{
 		chromedp.Focus(selector),
 		chromedp.Click(selector),
-		chromedp.MouseOver(selector),
 	}
 	return chromedp.Run(ctx, tasks)
 }
@@ -38,11 +38,9 @@ func fuzzInteraction(url, payload string) bool {
 
 	var foundSelector string
 	chromedp.ListenTarget(ctx, func(ev interface{}) {
-		switch ev := ev.(type) {
-		case *chromedp.EventDialogOpening:
-			if ev.Message == "XSS" || ev.Message == "1337" {
-				foundSelector = "detected"
-			}
+		switch ev.(type) {
+		case *runtime.EventExceptionThrown:
+			foundSelector = "detected"
 		}
 	})
 
@@ -57,8 +55,8 @@ func fuzzInteraction(url, payload string) bool {
 	}
 
 	for _, node := range nodes {
-		if node.FullXPath != "" {
-			triggerDOMEvents(ctx, node.FullXPath)
+		if node.FullXPath() != "" {
+			triggerDOMEvents(ctx, node.FullXPath())
 		}
 	}
 	return foundSelector == "detected"
@@ -70,7 +68,7 @@ func simulatePayloadExecution(url string, payload string) bool {
 
 	var alertFired bool
 	chromedp.ListenTarget(ctx, func(ev interface{}) {
-		if _, ok := ev.(*chromedp.EventDialogOpening); ok {
+		if _, ok := ev.(*runtime.EventExceptionThrown); ok {
 			alertFired = true
 		}
 	})
@@ -85,4 +83,16 @@ func simulatePayloadExecution(url string, payload string) bool {
 		return false
 	}
 	return alertFired
+}
+
+func captureElementScreenshot(url, sel string) ([]byte, error) {
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel()
+
+	var buf []byte
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(url),
+		chromedp.Screenshot(sel, &buf, chromedp.NodeVisible),
+	)
+	return buf, err
 }

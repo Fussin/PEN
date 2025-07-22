@@ -21,17 +21,34 @@ func (c *ContextAnalyzer) AnalyzeContext(body string, paramName string, payload 
 
 	// Check for script tags
 	if doc.Find("script").Length() > 0 {
-		return "javascript"
+		if strings.Contains(doc.Find("script").Text(), payload) {
+			return "javascript"
+		}
 	}
 
 	// Check for style tags
 	if doc.Find("style").Length() > 0 {
-		return "css"
+		if strings.Contains(doc.Find("style").Text(), payload) {
+			return "css"
+		}
 	}
 
 	// Check for attributes
-	if doc.Find(payload).Length() > 0 {
+	var attrContext bool
+	doc.Find("*").Each(func(i int, s *goquery.Selection) {
+		for _, attr := range s.Nodes[0].Attr {
+			if strings.Contains(attr.Val, payload) {
+				attrContext = true
+			}
+		}
+	})
+	if attrContext {
 		return "attribute"
+	}
+
+	// Check for URL contexts
+	if doc.Find("a[href*=\""+payload+"\"]").Length() > 0 {
+		return "url"
 	}
 
 	return "html"
