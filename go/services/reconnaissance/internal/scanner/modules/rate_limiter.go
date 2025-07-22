@@ -6,23 +6,21 @@ import (
 )
 
 type RateLimiter struct {
-	tokens         int
-	maxTokens      int
-	refillRate     int
-	refillInterval time.Duration
-	refillTicker   *time.Ticker
-	mtx            sync.Mutex
-	refillStopped  chan bool
+	tokens        int
+	maxTokens     int
+	refillRate    int
+	refillTicker  *time.Ticker
+	mtx           sync.Mutex
+	refillStopped chan bool
 }
 
 func NewRateLimiter(rate int, interval time.Duration, maxTokens int) *RateLimiter {
 	limiter := &RateLimiter{
-		tokens:         maxTokens,
-		maxTokens:      maxTokens,
-		refillRate:     rate,
-		refillInterval: interval,
-		refillTicker:   time.NewTicker(interval),
-		refillStopped:  make(chan bool),
+		tokens:        maxTokens,
+		maxTokens:     maxTokens,
+		refillRate:    rate,
+		refillTicker:  time.NewTicker(interval),
+		refillStopped: make(chan bool),
 	}
 
 	go limiter.refill()
@@ -61,12 +59,4 @@ func (r *RateLimiter) Wait() {
 func (r *RateLimiter) Stop() {
 	r.refillTicker.Stop()
 	close(r.refillStopped)
-}
-
-func (r *RateLimiter) AdjustRate(newRate int, newInterval time.Duration) {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	r.refillRate = newRate
-	r.refillInterval = newInterval
-	r.refillTicker.Reset(newInterval)
 }

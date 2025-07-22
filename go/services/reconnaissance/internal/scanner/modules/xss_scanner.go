@@ -2,16 +2,12 @@ package modules
 
 import (
 	"context"
-	"crypto/tls"
+	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
-
-	"github.com/autonomouspen/reconnaissance/internal/common"
-	"github.com/autonomouspen/reconnaissance/internal/scanner/plugins"
 )
 
 type XSSScanner struct {
@@ -23,7 +19,6 @@ type XSSScanner struct {
 	validator       *XSSValidator
 	results         *ResultCollector
 	wafFingerprinter *WAFFingerprinter
-	passivePlugins  []plugins.PassivePlugin
 }
 
 type ScannerConfig struct {
@@ -36,7 +31,6 @@ type ScannerConfig struct {
 	RateLimit            int
 	RateLimitInterval    time.Duration
 	RateLimitMaxTokens   int
-	LogFile              string
 }
 
 func NewXSSScanner(config *ScannerConfig) *XSSScanner {
@@ -51,9 +45,6 @@ func NewXSSScanner(config *ScannerConfig) *XSSScanner {
 		validator:       NewXSSValidator(),
 		results:         NewResultCollector(),
 		wafFingerprinter: NewWAFFingerprinter(),
-		passivePlugins: []plugins.PassivePlugin{
-			&plugins.PasswordInputDetector{},
-		},
 	}
 }
 
@@ -62,11 +53,10 @@ type Task struct {
 	Param string
 }
 
-func (x *XSSScanner) Scan(ctx context.Context, target *common.Target, vulnChan chan<- *common.Vulnerability) {
-	parsedURL, err := url.Parse(target.URL)
+func (x *XSSScanner) ScanURL(ctx context.Context, rawURL string) error {
+	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
-		log.Printf("failed to parse URL: %v", err)
-		return
+		return fmt.Errorf("failed to parse URL: %v", err)
 	}
 
 	tasks := make(chan Task, 100)
@@ -77,7 +67,7 @@ func (x *XSSScanner) Scan(ctx context.Context, target *common.Target, vulnChan c
 		go func() {
 			defer wg.Done()
 			for t := range tasks {
-				x.fuzzParameter(ctx, t.URL, t.Param, vulnChan)
+				x.fuzzParameter(ctx, t.URL, t.Param)
 			}
 		}()
 	}
@@ -88,9 +78,10 @@ func (x *XSSScanner) Scan(ctx context.Context, target *common.Target, vulnChan c
 	}
 	close(tasks)
 	wg.Wait()
+	return nil
 }
 
-func (x *XSSScanner) fuzzParameter(ctx context.Context, parsedURL *url.URL, param string, vulnChan chan<- *common.Vulnerability) {
+func (x *XSSScanner) fuzzParameter(ctx context.Context, parsedURL *url.URL, param string) {
 	baseQuery := parsedURL.Query()
 	originalValue := baseQuery.Get(param)
 
@@ -103,38 +94,24 @@ func (x *XSSScanner) fuzzParameter(ctx context.Context, parsedURL *url.URL, para
 
 	req, err := http.NewRequestWithContext(ctx, "GET", targetURL.String(), nil)
 	if err != nil {
-		log.Printf("Error creating request: %v", err)
 		return
 	}
 	req.Header.Set("User-Agent", x.config.UserAgent)
 
 	resp, err := x.client.Do(req)
 	if err != nil {
-		log.Printf("Error sending request: %v", err)
 		return
 	}
 
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		log.Printf("Error reading response body: %v", err)
 		return
 	}
 	body := string(bodyBytes)
 
-	for _, plugin := range x.passivePlugins {
-		for _, finding := range plugin.Execute(targetURL.String(), body) {
-			vulnChan <- &common.Vulnerability{
-				Type:     finding.Type,
-				Severity: finding.Severity,
-				URL:      finding.URL,
-				Evidence: finding.Evidence,
-			}
-		}
-	}
-
 	if x.wafFingerprinter.DetectWAF(resp, body) {
-		log.Println("[!] WAF Detected!")
+		fmt.Println("[!] WAF Detected!")
 		// In a real implementation, we would adjust our scanning strategy here.
 	}
 
@@ -151,28 +128,25 @@ func (x *XSSScanner) fuzzParameter(ctx context.Context, parsedURL *url.URL, para
 
 		req, err := http.NewRequestWithContext(ctx, "GET", targetURL.String(), nil)
 		if err != nil {
-			log.Printf("Error creating request: %v", err)
 			continue
 		}
 		req.Header.Set("User-Agent", x.config.UserAgent)
 
 		resp, err := x.client.Do(req)
 		if err != nil {
-			log.Printf("Error sending request: %v", err)
 			continue
 		}
 
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			log.Printf("Error reading response body: %v", err)
 			continue
 		}
 
 		body := string(bodyBytes)
 		verified, evidence := x.validator.Validate(payload.Value, body)
 		if verified {
-			vuln := &common.Vulnerability{
+			vuln := Vulnerability{
 				Type:       "Reflected XSS",
 				Severity:   "Medium",
 				URL:        targetURL.String(),
@@ -187,10 +161,10 @@ func (x *XSSScanner) fuzzParameter(ctx context.Context, parsedURL *url.URL, para
 				Response:   truncateBody(body),
 			}
 
-			vulnChan <- vuln
+			x.results.Add(vuln)
 
 			if x.config.EnableScreenshots {
-				go func(v *common.Vulnerability) {
+				go func(v Vulnerability) {
 					img := captureScreenshotWithChromedp(v.URL)
 					x.results.AttachScreenshot(v.URL, img)
 				}(vuln)
@@ -210,23 +184,23 @@ func truncateBody(body string) string {
 }
 
 func createHTTPClient(config *ScannerConfig) *http.Client {
-	proxyFunc := http.ProxyFromEnvironment
-	if config.ProxyURL != "" {
-		proxyURL, err := url.Parse(config.ProxyURL)
-		if err == nil {
-			proxyFunc = http.ProxyURL(proxyURL)
-		}
-	}
-
-	return &http.Client{
-		Transport: &http.Transport{
-			Proxy:           proxyFunc,
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-		Timeout: config.RequestTimeout,
-	}
+	return &http.Client{}
 }
 
 func (x *XSSScanner) Results() *ResultCollector {
 	return x.results
+}
+type Vulnerability struct {
+	Type        string
+	Severity    string
+	URL         string
+	Parameter   string
+	Payload     string
+	Evidence    string
+	Confidence  string
+	CWE         string
+	CVSS        float64
+	Timestamp   time.Time
+	Request     string
+	Response    string
 }

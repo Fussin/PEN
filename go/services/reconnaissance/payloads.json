@@ -14,21 +14,5 @@
   {
     "Value": "background:url(javascript:alert('XSS'))",
     "Context": "css"
-  },
-  {
-    "Value": "<svg/onload=alert('XSS')>",
-    "Context": "html"
-  },
-  {
-    "Value": "<img src=x onerror=alert('XSS')>",
-    "Context": "html"
-  },
-  {
-    "Value": "'>\"><script>alert('XSS')</script>",
-    "Context": "html"
-  },
-  {
-    "Value": "';alert('XSS');'",
-    "Context": "javascript"
   }
 ]
