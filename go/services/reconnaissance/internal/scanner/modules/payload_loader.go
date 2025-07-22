@@ -7,13 +7,9 @@ import (
 	"sync"
 )
 
-type Payload struct {
-	Value   string `json:"Value"`
-	Context string `json:"Context"`
-}
-
 type PayloadManager struct {
 	mu              sync.Mutex
+	customPayloads  []Payload
 	contextPayloads map[string][]Payload
 }
 
@@ -39,9 +35,7 @@ func (pm *PayloadManager) LoadPayloadsFromFile(filePath string) error {
 
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	for _, p := range payloads {
-		pm.contextPayloads[p.Context] = append(pm.contextPayloads[p.Context], p)
-	}
+	pm.customPayloads = append(pm.customPayloads, payloads...)
 	return nil
 }
 

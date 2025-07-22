@@ -17,8 +17,6 @@ func (w *WAFFingerprinter) DetectWAF(resp *http.Response, body string) bool {
 	}
 	knownWAFHeaders := []string{
 		"X-Akamai-Session-Info", "X-Sucuri", "X-Distil-CS", "X-WAF-Detected",
-		"X-Cloud-Trace-Context", "X-Cloud-Trace-Context", "X-AppGW-Application-Gateway",
-		"X-Azure-Ref", "X-CDN-Loop", "X-Edge-IP", "X-EdgeConnect-MidMile-RTT",
 	}
 
 	for k := range resp.Header {
@@ -32,7 +30,6 @@ func (w *WAFFingerprinter) DetectWAF(resp *http.Response, body string) bool {
 	wafPatterns := []string{
 		"Access Denied", "Request blocked", "Security Firewall", "WAF", "Mod_Security",
 		"You have been blocked", "403 Forbidden", "This request was blocked",
-		"Cloudflare", "Incapsula", "Akamai", "Sucuri", "F5", "Barracuda",
 	}
 
 	for _, pattern := range wafPatterns {

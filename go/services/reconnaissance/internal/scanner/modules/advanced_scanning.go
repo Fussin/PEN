@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"html"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -48,7 +47,5 @@ func mutatePayloads(payload string) []string {
 		strings.ReplaceAll(payload, "alert", "a"+"l"+"ert"),
 		html.EscapeString(payload),
 		`<scr<script>ipt>alert(1)</scr<script>ipt>`,
-		strings.ToUpper(payload),
-		strings.ToLower(payload),
 	}
 }
