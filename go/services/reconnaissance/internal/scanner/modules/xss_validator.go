@@ -16,6 +16,11 @@ func NewXSSValidator() *XSSValidator {
 			regexp.MustCompile(`(?i)<script[^>]*?>[^<]*?alert\(`),
 			regexp.MustCompile(`(?i)onerror\s*=\s*["']?alert\(`),
 			regexp.MustCompile(`(?i)<img src=["']?x["']? onerror=`),
+			regexp.MustCompile(`(?i)<svg/onload=alert\(`),
+			regexp.MustCompile(`(?i)<iframe src="javascript:alert\(`),
+			regexp.MustCompile(`(?i)javascript:alert\(`),
+			regexp.MustCompile(`(?i)data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==`),
+			regexp.MustCompile(`(?i)\bon\w+\s*=\s*["']?alert\(`),
 		},
 	}
 }
@@ -29,5 +34,14 @@ func (v *XSSValidator) Validate(payload, body string) (bool, string) {
 			}
 		}
 	}
+
+	// Check for character escapes
+	if strings.Contains(body, strings.ReplaceAll(payload, "<", "&lt;")) {
+		return true, "HTML-encoded payload found"
+	}
+	if strings.Contains(body, strings.ReplaceAll(payload, "\"", "&quot;")) {
+		return true, "HTML-encoded payload found"
+	}
+
 	return false, ""
 }
