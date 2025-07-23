@@ -2,17 +2,30 @@ package detection
 
 import (
 	"context"
-	"io/ioutil"
-	"net/http"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/autonomouspen/scanner/internal/common"
+	"github.com/autonomouspen/scanner/internal/httpclient"
+	"github.com/autonomouspen/scanner/internal/scannerutil"
 )
 
-type SecondOrder struct{}
+type SecondOrderEngine struct {
+	client *httpclient.Client
+}
 
-func (s *SecondOrder) Detect(target string, ctx context.Context) ([]common.Finding, error) {
-	var findings []common.Finding
+func NewSecondOrderEngine(client *httpclient.Client) *SecondOrderEngine {
+	return &SecondOrderEngine{
+		client: client,
+	}
+}
+
+func (e *SecondOrderEngine) Name() string {
+	return "Second-Order SQLi"
+}
+
+func (e *SecondOrderEngine) Detect(target string, param common.InjectionPoint, scanner interface{}, ctx context.Context) (*common.Finding, error) {
 	// In a real implementation, we would need a way to specify the submission
 	// and verification endpoints. For now, we'll just use the same endpoint
 	// for both.
@@ -21,29 +34,32 @@ func (s *SecondOrder) Detect(target string, ctx context.Context) ([]common.Findi
 	payload := "' AND 1=1 --"
 
 	// Submit the payload
-	_, err := http.Get(submissionURL + payload)
+	injected := param.WithInjection(payload)
+	_, _, err := e.client.SendVerboseRequest(injected)
 	if err != nil {
 		return nil, err
 	}
 
 	// Visit the verification page
-	resp, err := http.Get(verificationURL)
+	resp, body, err := e.client.SendVerboseRequest(param.WithoutInjection())
 	if err != nil {
 		return nil, err
 	}
-	body, _ := ioutil.ReadAll(resp.Body)
 
-	if strings.Contains(string(body), "some indicator of successful injection") {
-		findings = append(findings, common.Finding{
-			Type:       "Second-order SQLi",
-			Severity:   "High",
-			URL:        submissionURL + payload,
+	if strings.Contains(body, "some indicator of successful injection") {
+		return &common.Finding{
+			URL:        submissionURL,
+			Parameter:  param.Name,
+			Payload:    payload,
+			Type:       e.Name(),
 			Evidence:   "Payload was reflected on a different page.",
+			Severity:   "High",
 			Confidence: "High",
-			CWE:        "CWE-89",
-			CVSS:       8.8,
-		})
+			Timestamp:  time.Now(),
+			Request:    fmt.Sprintf("%+v", resp.Request),
+			Response:   scannerutil.TruncateBody(body),
+		}, nil
 	}
 
-	return findings, nil
+	return nil, nil
 }

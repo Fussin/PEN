@@ -2,18 +2,29 @@ package detection
 
 import (
 	"context"
-	"io/ioutil"
-	"net/http"
-	"strings"
+	"fmt"
+	"time"
 
 	"github.com/autonomouspen/scanner/internal/common"
+	"github.com/autonomouspen/scanner/internal/httpclient"
+	"github.com/autonomouspen/scanner/internal/scannerutil"
 )
 
-type BooleanBased struct{}
+type BooleanBasedEngine struct {
+	client *httpclient.Client
+}
 
-func (b *BooleanBased) Detect(target string, ctx context.Context) ([]common.Finding, error) {
-	var findings []common.Finding
+func NewBooleanBasedEngine(client *httpclient.Client) *BooleanBasedEngine {
+	return &BooleanBasedEngine{
+		client: client,
+	}
+}
 
+func (e *BooleanBasedEngine) Name() string {
+	return "Boolean-Based SQLi"
+}
+
+func (e *BooleanBasedEngine) Detect(target string, param common.InjectionPoint, scanner interface{}, ctx context.Context) (*common.Finding, error) {
 	payloads := []struct {
 		True  string
 		False string
@@ -24,37 +35,39 @@ func (b *BooleanBased) Detect(target string, ctx context.Context) ([]common.Find
 		{"\" OR 1=1 --", "\" OR 1=2 --"},
 	}
 
-	for _, payload := range payloads {
-		originalResp, err := http.Get(target)
+	originalResp, originalBody, err := e.client.SendVerboseRequest(param.WithoutInjection())
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range payloads {
+		trueInjected := param.WithInjection(p.True)
+		_, trueBody, err := e.client.SendVerboseRequest(trueInjected)
 		if err != nil {
 			continue
 		}
-		originalBody, _ := ioutil.ReadAll(originalResp.Body)
 
-		trueResp, err := http.Get(target + payload.True)
+		falseInjected := param.WithInjection(p.False)
+		_, falseBody, err := e.client.SendVerboseRequest(falseInjected)
 		if err != nil {
 			continue
 		}
-		trueBody, _ := ioutil.ReadAll(trueResp.Body)
 
-		falseResp, err := http.Get(target + payload.False)
-		if err != nil {
-			continue
-		}
-		falseBody, _ := ioutil.ReadAll(falseResp.Body)
-
-		if !strings.EqualFold(string(originalBody), string(trueBody)) && strings.EqualFold(string(trueBody), string(falseBody)) {
-			findings = append(findings, common.Finding{
-				Type:       "Boolean-based SQLi",
-				Severity:   "High",
-				URL:        target + payload.True,
+		if scannerutil.StringDifference(originalBody, trueBody) > 0.9 && scannerutil.StringDifference(trueBody, falseBody) > 0.9 {
+			return &common.Finding{
+				URL:        target,
+				Parameter:  param.Name,
+				Payload:    p.True,
+				Type:       e.Name(),
 				Evidence:   "Response differs between true and false payloads.",
+				Severity:   "High",
 				Confidence: "High",
-				CWE:        "CWE-89",
-				CVSS:       8.8,
-			})
+				Timestamp:  time.Now(),
+				Request:    fmt.Sprintf("%+v", originalResp.Request),
+				Response:   scannerutil.TruncateBody(originalBody),
+			}, nil
 		}
 	}
 
-	return findings, nil
+	return nil, nil
 }

@@ -2,17 +2,29 @@ package detection
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 	"time"
 
 	"github.com/autonomouspen/scanner/internal/common"
+	"github.com/autonomouspen/scanner/internal/httpclient"
+	"github.com/autonomouspen/scanner/internal/scannerutil"
 )
 
-type TimeBased struct{}
+type TimeBasedEngine struct {
+	client *httpclient.Client
+}
 
-func (t *TimeBased) Detect(target string, ctx context.Context) ([]common.Finding, error) {
-	var findings []common.Finding
+func NewTimeBasedEngine(client *httpclient.Client) *TimeBasedEngine {
+	return &TimeBasedEngine{
+		client: client,
+	}
+}
 
+func (e *TimeBasedEngine) Name() string {
+	return "Time-Based SQLi"
+}
+
+func (e *TimeBasedEngine) Detect(target string, param common.InjectionPoint, scanner interface{}, ctx context.Context) (*common.Finding, error) {
 	payloads := map[string]string{
 		"MySQL":      "' AND SLEEP(5) --",
 		"PostgreSQL": "' AND pg_sleep(5) --",
@@ -20,27 +32,31 @@ func (t *TimeBased) Detect(target string, ctx context.Context) ([]common.Finding
 		"Oracle":     "' AND dbms_pipe.receive_message(('a'),5) --",
 	}
 
-	for dbms, payload := range payloads {
+	for dbms, p := range payloads {
+		injected := param.WithInjection(p)
 		startTime := time.Now()
-		_, err := http.Get(target + payload)
+		resp, _, err := e.client.SendVerboseRequest(injected)
 		if err != nil {
 			continue
 		}
 		elapsedTime := time.Since(startTime)
 
 		if elapsedTime > 5*time.Second {
-			findings = append(findings, common.Finding{
-				Type:       "Time-based SQLi",
-				Severity:   "High",
-				URL:        target + payload,
-				Evidence:   "Response took longer than 5 seconds.",
-				Confidence: "High",
-				CWE:        "CWE-89",
-				CVSS:       8.8,
+			return &common.Finding{
+				URL:        target,
+				Parameter:  param.Name,
+				Payload:    p,
 				DBMS:       dbms,
-			})
+				Type:       e.Name(),
+				Evidence:   fmt.Sprintf("Response took %s", elapsedTime),
+				Severity:   "High",
+				Confidence: "High",
+				Timestamp:  time.Now(),
+				Request:    fmt.Sprintf("%+v", resp.Request),
+				Response:   scannerutil.TruncateBody(""),
+			}, nil
 		}
 	}
 
-	return findings, nil
+	return nil, nil
 }

@@ -3,17 +3,29 @@ package detection
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strings"
+	"time"
 
 	"github.com/autonomouspen/scanner/internal/common"
+	"github.com/autonomouspen/scanner/internal/httpclient"
+	"github.com/autonomouspen/scanner/internal/scannerutil"
 )
 
-type UnionBased struct{}
+type UnionBasedEngine struct {
+	client *httpclient.Client
+}
 
-func (u *UnionBased) Detect(target string, ctx context.Context) ([]common.Finding, error) {
-	var findings []common.Finding
+func NewUnionBasedEngine(client *httpclient.Client) *UnionBasedEngine {
+	return &UnionBasedEngine{
+		client: client,
+	}
+}
+
+func (e *UnionBasedEngine) Name() string {
+	return "Union-Based SQLi"
+}
+
+func (e *UnionBasedEngine) Detect(target string, param common.InjectionPoint, scanner interface{}, ctx context.Context) (*common.Finding, error) {
 	injectionMarker := "UNIONSELECT"
 
 	for i := 1; i < 20; i++ {
@@ -22,26 +34,28 @@ func (u *UnionBased) Detect(target string, ctx context.Context) ([]common.Findin
 			columns = append(columns, fmt.Sprintf("'%s'", injectionMarker))
 		}
 		payload := fmt.Sprintf("' UNION SELECT %s --", strings.Join(columns, ","))
+		injected := param.WithInjection(payload)
 
-		resp, err := http.Get(target + payload)
+		resp, body, err := e.client.SendVerboseRequest(injected)
 		if err != nil {
 			continue
 		}
-		body, _ := ioutil.ReadAll(resp.Body)
 
-		if strings.Contains(string(body), injectionMarker) {
-			findings = append(findings, common.Finding{
-				Type:       "Union-based SQLi",
-				Severity:   "High",
-				URL:        target + payload,
+		if strings.Contains(body, injectionMarker) {
+			return &common.Finding{
+				URL:        target,
+				Parameter:  param.Name,
+				Payload:    payload,
+				Type:       e.Name(),
 				Evidence:   "Injected data was found in the response.",
+				Severity:   "High",
 				Confidence: "High",
-				CWE:        "CWE-89",
-				CVSS:       8.8,
-			})
-			break
+				Timestamp:  time.Now(),
+				Request:    fmt.Sprintf("%+v", resp.Request),
+				Response:   scannerutil.TruncateBody(body),
+			}, nil
 		}
 	}
 
-	return findings, nil
+	return nil, nil
 }
