@@ -12,17 +12,20 @@ type Scanner interface {
 }
 
 type Finding struct {
-	Type        string
-	Severity    string
-	URL         string
-	Evidence    string
-	Confidence  string
-	CWE         string
-	CVSS        float64
-	Timestamp   time.Time
-	Request     string
-	Response    string
-	Screenshot  string
+	Type        string    `json:"type"`
+	Severity    string    `json:"severity"`
+	URL         string    `json:"url"`
+	Evidence    string    `json:"evidence"`
+	Confidence  string    `json:"confidence"`
+	CWE         string    `json:"cwe"`
+	CVSS        float64   `json:"cvss"`
+	Timestamp   time.Time `json:"timestamp"`
+	Parameter   string    `json:"parameter,omitempty"`
+	Payload     string    `json:"payload,omitempty"`
+	DBMS        string    `json:"dbms,omitempty"`
+	Screenshot  string    `json:"screenshot,omitempty"`
+	Request     string    `json:"request,omitempty"`
+	Response    string    `json:"response,omitempty"`
 }
 
 type ScannerConfig struct {

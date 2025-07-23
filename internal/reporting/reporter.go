@@ -45,13 +45,13 @@ func (r *Reporter) generateCSV(findings []common.Finding, outputFile string) err
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	header := []string{"Type", "Severity", "URL", "Evidence", "Confidence", "CWE", "CVSS", "Timestamp"}
+	header := []string{"Type", "Severity", "URL", "Evidence", "Confidence", "CWE", "CVSS", "Timestamp", "Parameter", "Payload", "DBMS"}
 	writer.Write(header)
 
 	for _, v := range findings {
 		writer.Write([]string{
 			v.Type, v.Severity, v.URL, v.Evidence, v.Confidence, v.CWE,
-			"6.1", v.Timestamp.Format(time.RFC3339),
+			"8.8", v.Timestamp.Format(time.RFC3339), v.Parameter, v.Payload, v.DBMS,
 		})
 	}
 	return nil
@@ -83,6 +83,9 @@ func (r *Reporter) generateHTML(findings []common.Finding, outputFile string) er
 				<th>CWE</th>
 				<th>CVSS</th>
 				<th>Timestamp</th>
+				<th>Parameter</th>
+				<th>Payload</th>
+				<th>DBMS</th>
 			</tr>
 			{{range .Findings}}
 			<tr>
@@ -94,6 +97,9 @@ func (r *Reporter) generateHTML(findings []common.Finding, outputFile string) er
 				<td>{{.CWE}}</td>
 				<td>{{.CVSS}}</td>
 				<td>{{.Timestamp}}</td>
+				<td>{{.Parameter}}</td>
+				<td><pre>{{.Payload}}</pre></td>
+				<td>{{.DBMS}}</td>
 			</tr>
 			{{end}}
 		</table>
@@ -114,4 +120,20 @@ func (r *Reporter) generateHTML(findings []common.Finding, outputFile string) er
 	defer file.Close()
 
 	return t.Execute(file, data)
+}
+
+func (f *common.Finding) MarshalCSV() ([]string, error) {
+	return []string{
+		f.Type,
+		f.Severity,
+		f.URL,
+		f.Evidence,
+		f.Confidence,
+		f.CWE,
+		"8.8",
+		f.Timestamp.Format(time.RFC3339),
+		f.Parameter,
+		f.Payload,
+		f.DBMS,
+	}, nil
 }
