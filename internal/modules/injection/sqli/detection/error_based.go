@@ -2,58 +2,65 @@ package detection
 
 import (
 	"context"
-	"io/ioutil"
-	"net/http"
-	"strings"
+	"fmt"
+	"time"
 
 	"github.com/autonomouspen/scanner/internal/common"
+	"github.com/autonomouspen/scanner/internal/httpclient"
+	"github.com/autonomouspen/scanner/internal/modules/injection/sqli/fingerprinting"
+	"github.com/autonomouspen/scanner/internal/modules/injection/sqli/payloads"
+	"github.com/autonomouspen/scanner/internal/scannerutil"
 )
 
-type ErrorBased struct{}
+type ErrorBasedEngine struct {
+	fingerprinter *fingerprinting.DBMSFingerprinter
+	payloads      []payloads.Payload
+	client        *httpclient.Client
+}
 
-func (e *ErrorBased) Detect(target string, ctx context.Context) ([]common.Finding, error) {
-	var findings []common.Finding
-
-	payloads := []string{
-		"'",
-		"\"",
-		"\\",
-		"()",
-		"[]",
-		"{}",
-		"%",
+func NewErrorBasedEngine(fp *fingerprinting.DBMSFingerprinter, pm *payloads.Manager, client *httpclient.Client) *ErrorBasedEngine {
+	return &ErrorBasedEngine{
+		fingerprinter: fp,
+		payloads:      pm.GetPayloads(),
+		client:        client,
 	}
+}
 
-	errorPatterns := map[string]string{
-		"MySQL":      "You have an error in your SQL syntax",
-		"PostgreSQL": "syntax error at or near",
-		"Microsoft SQL Server": "Unclosed quotation mark after the character string",
-		"Oracle":     "ORA-00921: unexpected end of SQL command",
-		"SQLite":     "near \".\": syntax error",
-	}
+func (e *ErrorBasedEngine) Name() string {
+	return "Error-Based SQLi"
+}
 
-	for _, payload := range payloads {
-		resp, err := http.Get(target + payload)
+// Injects classic breaking payloads and checks for error messages from the DBMS
+func (e *ErrorBasedEngine) Detect(target string, param common.InjectionPoint, scanner interface{}, ctx context.Context) (*common.Finding, error) {
+	originalResp, _, _ := e.client.SendVerboseRequest(param.WithoutInjection())
+
+	for _, p := range e.payloads {
+		injected := param.WithInjection(p.Value)
+
+		resp, body, err := e.client.SendVerboseRequest(injected)
 		if err != nil {
 			continue
 		}
-		body, _ := ioutil.ReadAll(resp.Body)
 
-		for dbms, pattern := range errorPatterns {
-			if strings.Contains(string(body), pattern) {
-				findings = append(findings, common.Finding{
-					Type:       "Error-based SQLi",
-					Severity:   "High",
-					URL:        target + payload,
-					Evidence:   pattern,
-					Confidence: "High",
-					CWE:        "CWE-89",
-					CVSS:       8.8,
-					DBMS:       dbms,
-				})
+		if matched, dbms, signature := e.fingerprinter.Match(body); matched {
+			diff := scannerutil.StringDifference(originalResp, body)
+			f := &common.Finding{
+				URL:        target,
+				Parameter:  param.Name,
+				Payload:    p.Value,
+				DBMS:       dbms,
+				Type:       e.Name(),
+				Evidence:   signature,
+				// Diff:      diff,
+				Severity:   "High",
+				Confidence: "High",
+				Timestamp:  time.Now(),
+				Request:    fmt.Sprintf("%+v", resp.Request),
+				Response:   scannerutil.TruncateBody(body),
 			}
+			return f, nil
 		}
 	}
 
-	return findings, nil
+	return nil, nil
 }

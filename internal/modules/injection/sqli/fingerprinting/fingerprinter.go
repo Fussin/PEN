@@ -1,34 +1,39 @@
 package fingerprinting
 
-import (
-	"net/http"
-	"strings"
-)
+import "strings"
 
-type DBMSFingerprinter struct{}
-
-func NewDBMSFingerprinter() *DBMSFingerprinter {
-	return &DBMSFingerprinter{}
+type DBMSFingerprint struct {
+	Name    string
+	Pattern string
 }
 
-func (f *DBMSFingerprinter) Fingerprint(resp *http.Response, body string) string {
-	// In a real implementation, we would use a more sophisticated method
-	// to fingerprint the DBMS. For now, we'll just check for some common
-	// error messages.
-	if strings.Contains(body, "mysql") {
-		return "MySQL"
+type DBMSFingerprinter struct {
+	signatures []DBMSFingerprint
+}
+
+func NewDBMSFingerprinter() *DBMSFingerprinter {
+	return &DBMSFingerprinter{
+		signatures: []DBMSFingerprint{
+			{Name: "MySQL", Pattern: "You have an error in your SQL syntax"},
+			{Name: "MySQL", Pattern: "Supplied argument is not a valid MySQL result resource"},
+			{Name: "PostgreSQL", Pattern: "unterminated quoted string"},
+			{Name: "PostgreSQL", Pattern: "invalid input syntax for type"},
+			{Name: "Microsoft SQL Server", Pattern: "Unclosed quotation mark"},
+			{Name: "Microsoft SQL Server", Pattern: "An unhandled exception occurred during the execution of the current web request."},
+			{Name: "Oracle", Pattern: "ORA-"},
+			{Name: "Oracle", Pattern: "Oracle Error"},
+			{Name: "SQLite", Pattern: "SQLite3::SQLException"},
+			{Name: "SQLite", Pattern: "near \".\": syntax error"},
+		},
 	}
-	if strings.Contains(body, "postgresql") {
-		return "PostgreSQL"
+}
+
+func (fp *DBMSFingerprinter) Match(body string) (bool, string, string) {
+	lbody := strings.ToLower(body)
+	for _, sig := range fp.signatures {
+		if strings.Contains(lbody, strings.ToLower(sig.Pattern)) {
+			return true, sig.Name, sig.Pattern
+		}
 	}
-	if strings.Contains(body, "microsoft sql server") {
-		return "Microsoft SQL Server"
-	}
-	if strings.Contains(body, "oracle") {
-		return "Oracle"
-	}
-	if strings.Contains(body, "sqlite") {
-		return "SQLite"
-	}
-	return "Unknown"
+	return false, "", ""
 }
